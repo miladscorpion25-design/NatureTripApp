@@ -6,12 +6,12 @@ plugins {
 
 android {
     namespace = "com.example.naturetrip"
-    compileSdk = 35
+    compileSdk = 34
 
     defaultConfig {
         applicationId = "com.example.naturetrip"
         minSdk = 24
-        targetSdk = 35
+        targetSdk = 34
         versionCode = 1
         versionName = "1.0"
     }
