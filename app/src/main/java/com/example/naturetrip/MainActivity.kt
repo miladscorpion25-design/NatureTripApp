@@ -13,10 +13,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.firestore.EventListener
 import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.FirebaseFirestoreException
-import com.google.firebase.firestore.QuerySnapshot
+import com.google.firebase.firestore.QueryDocumentSnapshot
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -151,21 +149,20 @@ fun GroupChatScreen() {
     val currentUser = FirebaseAuth.getInstance().currentUser?.email ?: "ناشناس"
 
     DisposableEffect(Unit) {
-        val listener = db.collection("chats")
-            .addSnapshotListener(object : EventListener<QuerySnapshot> {
-                override fun onEvent(value: QuerySnapshot?, error: FirebaseFirestoreException?) {
-                    if (error != null) return
-                    if (value != null) {
-                        val list = mutableListOf<ChatMessage>()
-                        for (doc in value) {
-                            val item = doc.toObject(ChatMessage::class.java)
+        val registration = db.collection("chats")
+            .addSnapshotListener { snapshot, _ ->
+                if (snapshot != null) {
+                    val list = mutableListOf<ChatMessage>()
+                    for (doc in snapshot.documents) {
+                        val item = doc.toObject(ChatMessage::class.java)
+                        if (item != null) {
                             list.add(item)
                         }
-                        messages = list
                     }
+                    messages = list
                 }
-            })
-        onDispose { listener.remove() }
+            }
+        onDispose { registration.remove() }
     }
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
@@ -209,23 +206,20 @@ fun ChecklistScreen() {
     var itemsList by remember { mutableStateOf(listOf<ChecklistItem>()) }
 
     DisposableEffect(Unit) {
-        val listener = db.collection("checklist")
-            .addSnapshotListener(object : EventListener<QuerySnapshot> {
-                override fun onEvent(value: QuerySnapshot?, error: FirebaseFirestoreException?) {
-                    if (error != null) return
-                    if (value != null) {
-                        val list = mutableListOf<ChecklistItem>()
-                        for (doc in value) {
-                            val id = doc.id
-                            val title = doc.getString("title") ?: ""
-                            val isChecked = doc.getBoolean("isChecked") ?: false
-                            list.add(ChecklistItem(id = id, title = title, isChecked = isChecked))
-                        }
-                        itemsList = list
+        val registration = db.collection("checklist")
+            .addSnapshotListener { snapshot, _ ->
+                if (snapshot != null) {
+                    val list = mutableListOf<ChecklistItem>()
+                    for (doc in snapshot.documents) {
+                        val id = doc.id
+                        val title = doc.getString("title") ?: ""
+                        val isChecked = doc.getBoolean("isChecked") ?: false
+                        list.add(ChecklistItem(id = id, title = title, isChecked = isChecked))
                     }
+                    itemsList = list
                 }
-            })
-        onDispose { listener.remove() }
+            }
+        onDispose { registration.remove() }
     }
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
