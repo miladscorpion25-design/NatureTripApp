@@ -13,8 +13,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.EventListener
 import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.QueryDocumentSnapshot
+import com.google.firebase.firestore.FirebaseFirestoreException
+import com.google.firebase.firestore.QuerySnapshot
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -150,17 +152,19 @@ fun GroupChatScreen() {
 
     DisposableEffect(Unit) {
         val listener = db.collection("chats")
-            .addSnapshotListener { value, error ->
-                if (error != null) return@addSnapshotListener
-                if (value != null) {
-                    val list = mutableListOf<ChatMessage>()
-                    for (doc in value) {
-                        val item = doc.toObject(ChatMessage::class.java)
-                        list.add(item)
+            .addSnapshotListener(object : EventListener<QuerySnapshot> {
+                override fun onEvent(value: QuerySnapshot?, error: FirebaseFirestoreException?) {
+                    if (error != null) return
+                    if (value != null) {
+                        val list = mutableListOf<ChatMessage>()
+                        for (doc in value) {
+                            val item = doc.toObject(ChatMessage::class.java)
+                            list.add(item)
+                        }
+                        messages = list
                     }
-                    messages = list
                 }
-            }
+            })
         onDispose { listener.remove() }
     }
 
@@ -206,19 +210,21 @@ fun ChecklistScreen() {
 
     DisposableEffect(Unit) {
         val listener = db.collection("checklist")
-            .addSnapshotListener { value, error ->
-                if (error != null) return@addSnapshotListener
-                if (value != null) {
-                    val list = mutableListOf<ChecklistItem>()
-                    for (doc in value) {
-                        val id = doc.id
-                        val title = doc.getString("title") ?: ""
-                        val isChecked = doc.getBoolean("isChecked") ?: false
-                        list.add(ChecklistItem(id = id, title = title, isChecked = isChecked))
+            .addSnapshotListener(object : EventListener<QuerySnapshot> {
+                override fun onEvent(value: QuerySnapshot?, error: FirebaseFirestoreException?) {
+                    if (error != null) return
+                    if (value != null) {
+                        val list = mutableListOf<ChecklistItem>()
+                        for (doc in value) {
+                            val id = doc.id
+                            val title = doc.getString("title") ?: ""
+                            val isChecked = doc.getBoolean("isChecked") ?: false
+                            list.add(ChecklistItem(id = id, title = title, isChecked = isChecked))
+                        }
+                        itemsList = list
                     }
-                    itemsList = list
                 }
-            }
+            })
         onDispose { listener.remove() }
     }
 
