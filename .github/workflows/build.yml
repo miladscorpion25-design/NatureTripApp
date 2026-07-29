@@ -25,10 +25,10 @@ jobs:
           gradle-version: '8.4'
 
       - name: Build with Gradle
-        run: ./gradlew assembleDebug --stacktrace
+        run: gradle assembleDebug --stacktrace
 
       - name: Report Signing Fingerprints
-        run: ./gradlew signingReport
+        run: gradle signingReport
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
