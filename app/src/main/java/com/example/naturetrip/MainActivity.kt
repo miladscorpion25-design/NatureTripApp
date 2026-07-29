@@ -13,10 +13,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.firestore.EventListener
 import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.FirebaseFirestoreException
-import com.google.firebase.firestore.QuerySnapshot
+import com.google.firebase.firestore.QueryDocumentSnapshot
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -152,11 +150,17 @@ fun GroupChatScreen() {
 
     DisposableEffect(Unit) {
         val listener = db.collection("chats")
-            .addSnapshotListener(EventListener<QuerySnapshot> { snapshot, _ ->
-                if (snapshot != null) {
-                    messages = snapshot.toObjects(ChatMessage::class.java)
+            .addSnapshotListener { value, error ->
+                if (error != null) return@addSnapshotListener
+                if (value != null) {
+                    val list = mutableListOf<ChatMessage>()
+                    for (doc in value) {
+                        val item = doc.toObject(ChatMessage::class.java)
+                        list.add(item)
+                    }
+                    messages = list
                 }
-            })
+            }
         onDispose { listener.remove() }
     }
 
@@ -202,17 +206,19 @@ fun ChecklistScreen() {
 
     DisposableEffect(Unit) {
         val listener = db.collection("checklist")
-            .addSnapshotListener(EventListener<QuerySnapshot> { snapshot, _ ->
-                if (snapshot != null) {
-                    itemsList = snapshot.documents.map { doc ->
-                        ChecklistItem(
-                            id = doc.id,
-                            title = doc.getString("title") ?: "",
-                            isChecked = doc.getBoolean("isChecked") ?: false
-                        )
+            .addSnapshotListener { value, error ->
+                if (error != null) return@addSnapshotListener
+                if (value != null) {
+                    val list = mutableListOf<ChecklistItem>()
+                    for (doc in value) {
+                        val id = doc.id
+                        val title = doc.getString("title") ?: ""
+                        val isChecked = doc.getBoolean("isChecked") ?: false
+                        list.add(ChecklistItem(id = id, title = title, isChecked = isChecked))
                     }
+                    itemsList = list
                 }
-            })
+            }
         onDispose { listener.remove() }
     }
 
