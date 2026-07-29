@@ -21,9 +21,8 @@ jobs:
 
     - name: Setup Gradle
       uses: gradle/actions/setup-gradle@v3
-
-    - name: Make gradlew executable
-      run: chmod +x gradlew
+      with:
+        gradle-version: '8.4'
 
     - name: Build with Gradle
-      run: ./gradlew assembleDebug --stacktrace
+      run: gradle assembleDebug --stacktrace
