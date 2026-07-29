@@ -19,6 +19,9 @@ android {
         vectorDrawables {
             useSupportLibrary = true
         }
+        
+        // افزودن MultiDex برای جلوگیری از خطای DexArchiveMerger Exception
+        multiDexEnabled = true
     }
 
     buildTypes {
