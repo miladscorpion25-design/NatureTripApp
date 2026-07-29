@@ -199,7 +199,7 @@ fun ChecklistScreen() {
 
     DisposableEffect(Unit) {
         val listener = db.collection("checklist")
-            .addSnapshotListener { snapshot, _ ->
+            .addSnapshotListener { snapshot: com.google.firebase.firestore.QuerySnapshot?, _ ->
                 if (snapshot != null) {
                     itemsList = snapshot.documents.map { doc ->
                         ChecklistItem(
@@ -212,6 +212,7 @@ fun ChecklistScreen() {
             }
         onDispose { listener.remove() }
     }
+}
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
