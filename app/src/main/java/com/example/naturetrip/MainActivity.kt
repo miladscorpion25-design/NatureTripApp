@@ -13,10 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.firestore.EventListener
 import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.FirebaseFirestoreException
-import com.google.firebase.firestore.QuerySnapshot
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -150,23 +147,18 @@ fun GroupChatScreen() {
     var messages by remember { mutableStateOf(listOf<ChatMessage>()) }
     val currentUser = FirebaseAuth.getInstance().currentUser?.email ?: "ناشناس"
 
-    DisposableEffect(Unit) {
-        val registration = db.collection("chats")
-            .addSnapshotListener(object : EventListener<QuerySnapshot> {
-                override fun onEvent(value: QuerySnapshot?, error: FirebaseFirestoreException?) {
-                    if (value != null) {
-                        val list = mutableListOf<ChatMessage>()
-                        for (doc in value.documents) {
-                            val item = doc.toObject(ChatMessage::class.java)
-                            if (item != null) {
-                                list.add(item)
-                            }
-                        }
-                        messages = list
-                    }
+    LaunchedEffect(Unit) {
+        db.collection("chats").get().addOnSuccessListener { snapshot ->
+            if (snapshot != null) {
+                val list = mutableListOf<ChatMessage>()
+                for (doc in snapshot.documents) {
+                    val sender = doc.getString("sender") ?: ""
+                    val text = doc.getString("text") ?: ""
+                    list.add(ChatMessage(sender = sender, text = text))
                 }
-            })
-        onDispose { registration.remove() }
+                messages = list
+            }
+        }
     }
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
@@ -191,8 +183,10 @@ fun GroupChatScreen() {
             Button(onClick = {
                 if (messageText.isNotBlank()) {
                     val msg = ChatMessage(sender = currentUser, text = messageText)
-                    db.collection("chats").add(msg)
-                    messageText = ""
+                    db.collection("chats").add(msg).addOnSuccessListener {
+                        messages = messages + msg
+                        messageText = ""
+                    }
                 }
             }) {
                 Text("ارسال")
@@ -209,23 +203,19 @@ fun ChecklistScreen() {
     var itemTitle by remember { mutableStateOf("") }
     var itemsList by remember { mutableStateOf(listOf<ChecklistItem>()) }
 
-    DisposableEffect(Unit) {
-        val registration = db.collection("checklist")
-            .addSnapshotListener(object : EventListener<QuerySnapshot> {
-                override fun onEvent(value: QuerySnapshot?, error: FirebaseFirestoreException?) {
-                    if (value != null) {
-                        val list = mutableListOf<ChecklistItem>()
-                        for (doc in value.documents) {
-                            val id = doc.id
-                            val title = doc.getString("title") ?: ""
-                            val isChecked = doc.getBoolean("isChecked") ?: false
-                            list.add(ChecklistItem(id = id, title = title, isChecked = isChecked))
-                        }
-                        itemsList = list
-                    }
+    LaunchedEffect(Unit) {
+        db.collection("checklist").get().addOnSuccessListener { snapshot ->
+            if (snapshot != null) {
+                val list = mutableListOf<ChecklistItem>()
+                for (doc in snapshot.documents) {
+                    val id = doc.id
+                    val title = doc.getString("title") ?: ""
+                    val isChecked = doc.getBoolean("isChecked") ?: false
+                    list.add(ChecklistItem(id = id, title = title, isChecked = isChecked))
                 }
-            })
-        onDispose { registration.remove() }
+                itemsList = list
+            }
+        }
     }
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
@@ -239,9 +229,12 @@ fun ChecklistScreen() {
             Spacer(modifier = Modifier.width(8.dp))
             Button(onClick = {
                 if (itemTitle.isNotBlank()) {
-                    val newItem = hashMapOf("title" to itemTitle, "isChecked" to false)
-                    db.collection("checklist").add(newItem)
-                    itemTitle = ""
+                    val newItemMap = hashMapOf("title" to itemTitle, "isChecked" to false)
+                    db.collection("checklist").add(newItemMap).addOnSuccessListener { docRef ->
+                        val newItem = ChecklistItem(id = docRef.id, title = itemTitle, isChecked = false)
+                        itemsList = itemsList + newItem
+                        itemTitle = ""
+                    }
                 }
             }) {
                 Text("افزودن")
@@ -258,6 +251,9 @@ fun ChecklistScreen() {
                         checked = item.isChecked,
                         onCheckedChange = { checked ->
                             db.collection("checklist").document(item.id).update("isChecked", checked)
+                            itemsList = itemsList.map {
+                                if (it.id == item.id) it.copy(isChecked = checked) else it
+                            }
                         }
                     )
                     Text(text = item.title, modifier = Modifier.padding(start = 8.dp))
