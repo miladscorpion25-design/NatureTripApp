@@ -149,7 +149,7 @@ fun GroupChatScreen() {
 
     DisposableEffect(Unit) {
         val listener = db.collection("chats")
-            .addSnapshotListener { snapshot, _ ->
+            .addSnapshotListener { snapshot: com.google.firebase.firestore.QuerySnapshot?, _ ->
                 if (snapshot != null) {
                     messages = snapshot.toObjects(ChatMessage::class.java)
                 }
@@ -212,7 +212,6 @@ fun ChecklistScreen() {
             }
         onDispose { listener.remove() }
     }
-}
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
