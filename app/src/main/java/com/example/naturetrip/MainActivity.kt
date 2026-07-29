@@ -14,6 +14,8 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.FirebaseFirestoreException
+import com.google.firebase.firestore.QuerySnapshot
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -149,7 +151,7 @@ fun GroupChatScreen() {
 
     DisposableEffect(Unit) {
         val listener = db.collection("chats")
-            .addSnapshotListener { snapshot: com.google.firebase.firestore.QuerySnapshot?, _ ->
+            .addSnapshotListener { snapshot: QuerySnapshot?, error: FirebaseFirestoreException? ->
                 if (snapshot != null) {
                     messages = snapshot.toObjects(ChatMessage::class.java)
                 }
@@ -199,7 +201,7 @@ fun ChecklistScreen() {
 
     DisposableEffect(Unit) {
         val listener = db.collection("checklist")
-            .addSnapshotListener { snapshot: com.google.firebase.firestore.QuerySnapshot?, _ ->
+            .addSnapshotListener { snapshot: QuerySnapshot?, error: FirebaseFirestoreException? ->
                 if (snapshot != null) {
                     itemsList = snapshot.documents.map { doc ->
                         ChecklistItem(
