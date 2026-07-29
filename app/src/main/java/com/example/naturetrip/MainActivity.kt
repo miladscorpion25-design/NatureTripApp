@@ -13,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.EventListener
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.FirebaseFirestoreException
 import com.google.firebase.firestore.QuerySnapshot
@@ -151,11 +152,11 @@ fun GroupChatScreen() {
 
     DisposableEffect(Unit) {
         val listener = db.collection("chats")
-            .addSnapshotListener { snapshot: QuerySnapshot?, error: FirebaseFirestoreException? ->
+            .addSnapshotListener(EventListener<QuerySnapshot> { snapshot, _ ->
                 if (snapshot != null) {
                     messages = snapshot.toObjects(ChatMessage::class.java)
                 }
-            }
+            })
         onDispose { listener.remove() }
     }
 
@@ -201,7 +202,7 @@ fun ChecklistScreen() {
 
     DisposableEffect(Unit) {
         val listener = db.collection("checklist")
-            .addSnapshotListener { snapshot: QuerySnapshot?, error: FirebaseFirestoreException? ->
+            .addSnapshotListener(EventListener<QuerySnapshot> { snapshot, _ ->
                 if (snapshot != null) {
                     itemsList = snapshot.documents.map { doc ->
                         ChecklistItem(
@@ -211,7 +212,7 @@ fun ChecklistScreen() {
                         )
                     }
                 }
-            }
+            })
         onDispose { listener.remove() }
     }
 
