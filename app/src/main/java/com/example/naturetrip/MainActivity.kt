@@ -87,11 +87,11 @@ fun AuthScreen(onAuthSuccess: () -> Unit) {
                     if (isSignUp) {
                         auth.createUserWithEmailAndPassword(email, password)
                             .addOnSuccessListener { onAuthSuccess() }
-                            .addOnFailureListener { errorMessage = it.localizedMessage ?: "خطا" }
+                            .addOnFailureListener { errorMessage = it.localizedMessage ?: "خطا در ثبت‌نام" }
                     } else {
                         auth.signInWithEmailAndPassword(email, password)
                             .addOnSuccessListener { onAuthSuccess() }
-                            .addOnFailureListener { errorMessage = it.localizedMessage ?: "خطا" }
+                            .addOnFailureListener { errorMessage = it.localizedMessage ?: "خطا در ورود" }
                     }
                 }
             },
@@ -103,6 +103,7 @@ fun AuthScreen(onAuthSuccess: () -> Unit) {
             Text(if (isSignUp) "حساب دارید؟ ورود" else "حساب ندارید؟ ثبت‌نام")
         }
         if (errorMessage.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(8.dp))
             Text(text = errorMessage, color = MaterialTheme.colorScheme.error)
         }
     }
@@ -147,18 +148,19 @@ fun GroupChatScreen() {
     var messages by remember { mutableStateOf(listOf<ChatMessage>()) }
     val currentUser = FirebaseAuth.getInstance().currentUser?.email ?: "ناشناس"
 
-    LaunchedEffect(Unit) {
-        db.collection("chats").get().addOnSuccessListener { snapshot ->
-            if (snapshot != null) {
-                val list = mutableListOf<ChatMessage>()
-                for (doc in snapshot.documents) {
+    // دریافت آنلاین و لحظه‌ای پیام‌های چت
+    DisposableEffect(Unit) {
+        val listener = db.collection("chats")
+            .addSnapshotListener { snapshot, error ->
+                if (error != null || snapshot == null) return@addSnapshotListener
+                val list = snapshot.documents.mapNotNull { doc ->
                     val sender = doc.getString("sender") ?: ""
                     val text = doc.getString("text") ?: ""
-                    list.add(ChatMessage(sender = sender, text = text))
+                    ChatMessage(sender = sender, text = text)
                 }
                 messages = list
             }
-        }
+        onDispose { listener.remove() }
     }
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
@@ -183,10 +185,8 @@ fun GroupChatScreen() {
             Button(onClick = {
                 if (messageText.isNotBlank()) {
                     val msg = ChatMessage(sender = currentUser, text = messageText)
-                    db.collection("chats").add(msg).addOnSuccessListener {
-                        messages = messages + msg
-                        messageText = ""
-                    }
+                    db.collection("chats").add(msg)
+                    messageText = ""
                 }
             }) {
                 Text("ارسال")
@@ -200,22 +200,24 @@ data class ChecklistItem(val id: String = "", val title: String = "", val isChec
 @Composable
 fun ChecklistScreen() {
     val db = FirebaseFirestore.getInstance()
+    val userId = FirebaseAuth.getInstance().currentUser?.uid ?: return
     var itemTitle by remember { mutableStateOf("") }
     var itemsList by remember { mutableStateOf(listOf<ChecklistItem>()) }
 
-    LaunchedEffect(Unit) {
-        db.collection("checklist").get().addOnSuccessListener { snapshot ->
-            if (snapshot != null) {
-                val list = mutableListOf<ChecklistItem>()
-                for (doc in snapshot.documents) {
+    // دریافت آنلاین و لحظه‌ای چک‌لیست کاربر جاری
+    DisposableEffect(userId) {
+        val listener = db.collection("users").document(userId).collection("checklist")
+            .addSnapshotListener { snapshot, error ->
+                if (error != null || snapshot == null) return@addSnapshotListener
+                val list = snapshot.documents.mapNotNull { doc ->
                     val id = doc.id
                     val title = doc.getString("title") ?: ""
                     val isChecked = doc.getBoolean("isChecked") ?: false
-                    list.add(ChecklistItem(id = id, title = title, isChecked = isChecked))
+                    ChecklistItem(id = id, title = title, isChecked = isChecked)
                 }
                 itemsList = list
             }
-        }
+        onDispose { listener.remove() }
     }
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
@@ -230,11 +232,8 @@ fun ChecklistScreen() {
             Button(onClick = {
                 if (itemTitle.isNotBlank()) {
                     val newItemMap = hashMapOf("title" to itemTitle, "isChecked" to false)
-                    db.collection("checklist").add(newItemMap).addOnSuccessListener { docRef ->
-                        val newItem = ChecklistItem(id = docRef.id, title = itemTitle, isChecked = false)
-                        itemsList = itemsList + newItem
-                        itemTitle = ""
-                    }
+                    db.collection("users").document(userId).collection("checklist").add(newItemMap)
+                    itemTitle = ""
                 }
             }) {
                 Text("افزودن")
@@ -250,10 +249,9 @@ fun ChecklistScreen() {
                     Checkbox(
                         checked = item.isChecked,
                         onCheckedChange = { checked ->
-                            db.collection("checklist").document(item.id).update("isChecked", checked)
-                            itemsList = itemsList.map {
-                                if (it.id == item.id) it.copy(isChecked = checked) else it
-                            }
+                            db.collection("users").document(userId)
+                                .collection("checklist").document(item.id)
+                                .update("isChecked", checked)
                         }
                     )
                     Text(text = item.title, modifier = Modifier.padding(start = 8.dp))
