@@ -3,6 +3,8 @@ package com.example.naturetrip
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -10,253 +12,197 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 
+data class ChecklistItem(
+    val id: String = "",
+    val title: String = "",
+    val assignedTo: String = "", // اسم کسی که مسئولیتش رو برعهده گرفته
+    val isDone: Boolean = false
+)
+
 class MainActivity : ComponentActivity() {
+    private val db = FirebaseFirestore.getInstance()
+    private val auth = FirebaseAuth.getInstance()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // ورود ناشناس در صورت عدم ورود قبلی
+        if (auth.currentUser == null) {
+            auth.signInAnonymously()
+        }
+
         setContent {
             MaterialTheme {
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
-                ) {
-                    MainApp()
-                }
+                MainAppScreen(db, auth)
             }
         }
     }
 }
 
 @Composable
-fun MainApp() {
-    val auth = FirebaseAuth.getInstance()
-    var currentUser by remember { mutableStateOf(auth.currentUser) }
-
-    if (currentUser == null) {
-        AuthScreen(onAuthSuccess = { currentUser = auth.currentUser })
-    } else {
-        HomeScreen(onSignOut = {
-            auth.signOut()
-            currentUser = null
-        })
-    }
-}
-
-@Composable
-fun AuthScreen(onAuthSuccess: () -> Unit) {
-    val auth = FirebaseAuth.getInstance()
-    var email by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
-    var isSignUp by remember { mutableStateOf(false) }
-    var errorMessage by remember { mutableStateOf("") }
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Text(
-            text = if (isSignUp) "ثبت‌نام در سفر طبیعت" else "ورود به حساب",
-            style = MaterialTheme.typography.headlineMedium
-        )
-        Spacer(modifier = Modifier.height(16.dp))
-        OutlinedTextField(
-            value = email,
-            onValueChange = { email = it },
-            label = { Text("ایمیل") },
-            modifier = Modifier.fillMaxWidth()
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        OutlinedTextField(
-            value = password,
-            onValueChange = { password = it },
-            label = { Text("رمز عبور") },
-            visualTransformation = PasswordVisualTransformation(),
-            modifier = Modifier.fillMaxWidth()
-        )
-        Spacer(modifier = Modifier.height(16.dp))
-        Button(
-            onClick = {
-                if (email.isNotBlank() && password.isNotBlank()) {
-                    if (isSignUp) {
-                        auth.createUserWithEmailAndPassword(email, password)
-                            .addOnSuccessListener { onAuthSuccess() }
-                            .addOnFailureListener { errorMessage = it.localizedMessage ?: "خطا در ثبت‌نام" }
-                    } else {
-                        auth.signInWithEmailAndPassword(email, password)
-                            .addOnSuccessListener { onAuthSuccess() }
-                            .addOnFailureListener { errorMessage = it.localizedMessage ?: "خطا در ورود" }
-                    }
-                }
-            },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text(if (isSignUp) "ثبت‌نام" else "ورود")
-        }
-        TextButton(onClick = { isSignUp = !isSignUp }) {
-            Text(if (isSignUp) "حساب دارید؟ ورود" else "حساب ندارید؟ ثبت‌نام")
-        }
-        if (errorMessage.isNotEmpty()) {
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(text = errorMessage, color = MaterialTheme.colorScheme.error)
-        }
-    }
-}
-
-@Composable
-fun HomeScreen(onSignOut: () -> Unit) {
+fun MainAppScreen(db: FirebaseFirestore, auth: FirebaseAuth) {
     var selectedTab by remember { mutableStateOf(0) }
+    val tabs = listOf("چک‌لیست سفر", "مقصد سفر", "چت گروهی")
+
+    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+        TabRow(selectedTabIndex = selectedTab) {
+            tabs.forEachIndexed { index, title ->
+                Tab(
+                    selected = selectedTab == index,
+                    onClick = { selectedTab = index },
+                    text = { Text(title) }
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        when (selectedTab) {
+            0 -> SmartChecklistScreen(db, auth)
+            1 -> DestinationScreen(db)
+            2 -> GroupChatScreen(db, auth)
+        }
+    }
+}
+
+@Composable
+fun SmartChecklistScreen(db: FirebaseFirestore, auth: FirebaseAuth) {
+    var items by remember { mutableStateOf(listOf<ChecklistItem>()) }
+    var newItemText by remember { mutableStateOf("") }
+    var userName by remember { mutableStateOf("کاربر " + (auth.currentUser?.uid?.take(4) ?: "")) }
+
+    // بارگیری و همگام‌سازی لحظه‌ای لیست از فایربیس
+    LaunchedEffect(Unit) {
+        db.collection("shared_checklist").addSnapshotListener { snapshot, _ ->
+            if (snapshot != null) {
+                val list = snapshot.documents.mapNotNull { doc ->
+                    doc.toObject(ChecklistItem::class.java)?.copy(id = doc.id)
+                }
+                items = list
+            }
+        }
+    }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        TabRow(selectedTabIndex = selectedTab) {
-            Tab(selected = selectedTab == 0, onClick = { selectedTab = 0 }) {
-                Text("چت گروهی", modifier = Modifier.padding(16.dp))
-            }
-            Tab(selected = selectedTab == 1, onClick = { selectedTab = 1 }) {
-                Text("چک‌لیست سفر", modifier = Modifier.padding(16.dp))
-            }
-        }
-        Box(modifier = Modifier.weight(1f)) {
-            when (selectedTab) {
-                0 -> GroupChatScreen()
-                1 -> ChecklistScreen()
-            }
-        }
-        Button(
-            onClick = onSignOut,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp)
-        ) {
-            Text("خروج از حساب")
-        }
-    }
-}
+        Text("نام شما جهت ثبت مسئولیت:", style = MaterialTheme.typography.bodySmall)
+        OutlinedTextField(
+            value = userName,
+            onValueChange = { userName = it },
+            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+        )
 
-data class ChatMessage(val sender: String = "", val text: String = "")
-
-@Composable
-fun GroupChatScreen() {
-    val db = FirebaseFirestore.getInstance()
-    var messageText by remember { mutableStateOf("") }
-    var messages by remember { mutableStateOf(listOf<ChatMessage>()) }
-    val currentUser = FirebaseAuth.getInstance().currentUser?.email ?: "ناشناس"
-
-    // دریافت آنلاین و لحظه‌ای پیام‌های چت
-    DisposableEffect(Unit) {
-        val listener = db.collection("chats")
-            .addSnapshotListener { snapshot, error ->
-                if (error != null || snapshot == null) return@addSnapshotListener
-                val list = snapshot.documents.mapNotNull { doc ->
-                    val sender = doc.getString("sender") ?: ""
-                    val text = doc.getString("text") ?: ""
-                    ChatMessage(sender = sender, text = text)
-                }
-                messages = list
-            }
-        onDispose { listener.remove() }
-    }
-
-    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        LazyColumn(modifier = Modifier.weight(1f)) {
-            items(messages) { msg ->
-                Card(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-                    Column(modifier = Modifier.padding(8.dp)) {
-                        Text(text = msg.sender, style = MaterialTheme.typography.labelSmall)
-                        Text(text = msg.text, style = MaterialTheme.typography.bodyMedium)
+        Row(modifier = Modifier.fillMaxWidth()) {
+            OutlinedTextField(
+                value = newItemText,
+                onValueChange = { newItemText = it },
+                placeholder = { Text("افزودن وسیله جدید...") },
+                modifier = Modifier.weight(1f)
+            )
+            Button(
+                onClick = {
+                    if (newItemText.isNotBlank()) {
+                        val newItem = mapOf("title" to newItemText, "assignedTo" to "", "isDone" to false)
+                        db.collection("shared_checklist").add(newItem)
+                        newItemText = ""
                     }
-                }
-            }
-        }
-        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            OutlinedTextField(
-                value = messageText,
-                onValueChange = { messageText = it },
-                modifier = Modifier.weight(1f),
-                placeholder = { Text("پیام شما...") }
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Button(onClick = {
-                if (messageText.isNotBlank()) {
-                    val msg = ChatMessage(sender = currentUser, text = messageText)
-                    db.collection("chats").add(msg)
-                    messageText = ""
-                }
-            }) {
-                Text("ارسال")
-            }
-        }
-    }
-}
-
-data class ChecklistItem(val id: String = "", val title: String = "", val isChecked: Boolean = false)
-
-@Composable
-fun ChecklistScreen() {
-    val db = FirebaseFirestore.getInstance()
-    val userId = FirebaseAuth.getInstance().currentUser?.uid ?: return
-    var itemTitle by remember { mutableStateOf("") }
-    var itemsList by remember { mutableStateOf(listOf<ChecklistItem>()) }
-
-    // دریافت آنلاین و لحظه‌ای چک‌لیست کاربر جاری
-    DisposableEffect(userId) {
-        val listener = db.collection("users").document(userId).collection("checklist")
-            .addSnapshotListener { snapshot, error ->
-                if (error != null || snapshot == null) return@addSnapshotListener
-                val list = snapshot.documents.mapNotNull { doc ->
-                    val id = doc.id
-                    val title = doc.getString("title") ?: ""
-                    val isChecked = doc.getBoolean("isChecked") ?: false
-                    ChecklistItem(id = id, title = title, isChecked = isChecked)
-                }
-                itemsList = list
-            }
-        onDispose { listener.remove() }
-    }
-
-    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            OutlinedTextField(
-                value = itemTitle,
-                onValueChange = { itemTitle = it },
-                modifier = Modifier.weight(1f),
-                placeholder = { Text("وسایل مورد نیاز سفر...") }
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Button(onClick = {
-                if (itemTitle.isNotBlank()) {
-                    val newItemMap = hashMapOf("title" to itemTitle, "isChecked" to false)
-                    db.collection("users").document(userId).collection("checklist").add(newItemMap)
-                    itemTitle = ""
-                }
-            }) {
+                },
+                modifier = Modifier.padding(start = 8.dp)
+            ) {
                 Text("افزودن")
             }
         }
+
         Spacer(modifier = Modifier.height(16.dp))
-        LazyColumn {
-            items(itemsList) { item ->
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically
+
+        // افزودن آیتم‌های پیش‌فرض در صورت خالی بودن دیتابیس
+        if (items.isEmpty()) {
+            Button(
+                onClick = {
+                    val defaultItems = listOf("قوری و چای", "چادر مسافرتی", "زیرانداز", "منقل و زغال", "آب معدنی", "کنسرو و غذا", "کیت کمک‌های اولیه")
+                    defaultItems.forEach { title ->
+                        db.collection("shared_checklist").add(mapOf("title" to title, "assignedTo" to "", "isDone" to false))
+                    }
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("بارگیری اقلام پیش‌فرض سفر")
+            }
+        }
+
+        LazyColumn(modifier = Modifier.fillMaxSize().padding(top = 8.dp)) {
+            items(items) { item ->
+                Card(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).clickable {
+                        val newAssignee = if (item.assignedTo.isEmpty()) userName else ""
+                        db.collection("shared_checklist").document(item.id).update(
+                            "assignedTo", newAssignee,
+                            "isDone", newAssignee.isNotEmpty()
+                        )
+                    }
                 ) {
-                    Checkbox(
-                        checked = item.isChecked,
-                        onCheckedChange = { checked ->
-                            db.collection("users").document(userId)
-                                .collection("checklist").document(item.id)
-                                .update("isChecked", checked)
-                        }
-                    )
-                    Text(text = item.title, modifier = Modifier.padding(start = 8.dp))
+                    Row(
+                        modifier = Modifier.padding(16.dp).fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(text = item.title, style = MaterialTheme.typography.bodyLarge)
+                        Text(
+                            text = if (item.assignedTo.isNotEmpty()) "برعهده: ${item.assignedTo}" else "کسی برنداشته ➕",
+                            color = if (item.assignedTo.isNotEmpty()) Color(0xFF2E7D32) else Color.Gray
+                        )
+                    }
                 }
             }
         }
     }
+}
+
+@Composable
+fun DestinationScreen(db: FirebaseFirestore) {
+    var destination by remember { mutableStateOf("") }
+    var locationUrl by remember { mutableStateOf("") }
+
+    LaunchedEffect(Unit) {
+        db.collection("trip_info").document("destination").addSnapshotListener { snapshot, _ ->
+            if (snapshot != null && snapshot.exists()) {
+                destination = snapshot.getString("name") ?: ""
+                locationUrl = snapshot.getString("url") ?: ""
+            }
+        }
+    }
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        Text("مقصد سفر گروه:", style = MaterialTheme.typography.titleMedium)
+        OutlinedTextField(
+            value = destination,
+            onValueChange = { destination = it },
+            label = { Text("نام مکان (مثلاً: جنگل دالخانی)") },
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+        )
+        OutlinedTextField(
+            value = locationUrl,
+            onValueChange = { locationUrl = it },
+            label = { Text("لینک گوگل مپ یا نشان") },
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+        )
+        Button(
+            onClick = {
+                val data = mapOf("name" to destination, "url" to locationUrl)
+                db.collection("trip_info").document("destination").set(data)
+            },
+            modifier = Modifier.fillMaxWidth().padding(top = 16.dp)
+        ) {
+            Text("ثبت و اشتراک‌گذاری با همه")
+        }
+    }
+}
+
+@Composable
+fun GroupChatScreen(db: FirebaseFirestore, auth: FirebaseAuth) {
+    Text("بخش چت آنلاین گروهی")
 }
